@@ -1,5 +1,6 @@
 plugins {
     id("java-library")
+//    id("maven-publish")
     alias(libs.plugins.jetbrains.kotlin.jvm)
 }
 
@@ -25,3 +26,16 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+//afterEvaluate {
+//    publishing {
+//        publications {
+//            release(MavenPublication) {
+//                from components.release
+//                        groupId = 'com.github.lf7817'
+//                artifactId = 'nmea'
+//                version = '1.0.0'
+//            }
+//        }
+//    }
+//}

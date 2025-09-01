@@ -3,6 +3,7 @@
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
       <module name="rtk.app" target="21" />
+      <module name="rtk.example" target="21" />
     </bytecodeTargetLevel>
   </component>
 </project>
