@@ -11,6 +11,9 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/nmea" />
+            <option value="$PROJECT_DIR$/rtk-core" />
+            <option value="$PROJECT_DIR$/rtk-transport" />
+            <option value="$PROJECT_DIR$/rtk-transport-ble" />
           </set>
         </option>
         <option name="resolveExternalAnnotations" value="false" />

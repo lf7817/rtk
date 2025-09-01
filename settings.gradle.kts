@@ -21,3 +21,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "rtk"
 include(":nmea")
+include(":rtk-core")
+include(":rtk-transport")
+include(":rtk-transport-ble")
