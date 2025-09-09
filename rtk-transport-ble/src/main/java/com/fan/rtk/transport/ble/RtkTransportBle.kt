@@ -237,21 +237,17 @@ class RtkTransportBle(
         writeCharacteristicUuid: UUID,
         notifyCharacteristicUuid: UUID,
         expiredMtu: Int = 247
-    ): Flow<ConnectionState> = callbackFlow {
-        this@RtkTransportBle.close()
+    ): Unit {
+        close()
 
         if (!checkPermissionGranted() || !isBleEnabled()) {
             _connectionState.value = ConnectionState.Error(Exception("BLE permission denied or disabled"))
-            trySend(_connectionState.value)
-            close()
-            return@callbackFlow
+            return
         }
 
         val device = bluetoothAdapter?.getRemoteDevice(address) ?: run {
             _connectionState.value = ConnectionState.Error(Exception("Bluetooth device not found"))
-            trySend(_connectionState.value)
-            close()
-            return@callbackFlow
+            return
         }
 
         this@RtkTransportBle.serviceUuid = serviceUuid
@@ -274,8 +270,7 @@ class RtkTransportBle(
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
-                        _connectionState.tryEmit(ConnectionState.Disconnected)
-                        trySend(ConnectionState.Disconnected)
+                        _connectionState.value = ConnectionState.Disconnected
                     }
                 }
             }
@@ -301,22 +296,16 @@ class RtkTransportBle(
 
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    Log.d("RtkBle", "Services discovered")
-                    gatt.services.forEach { service ->
-                        Log.d("RtkBle", "Service UUID: ${service.uuid}")
-                    }
+                    Log.d("RtkBle", "Services discovered. Size: ${gatt.services.size}")
                     Log.d("RtkBle", "Requesting MTU $expiredMtu")
-
                     gatt.requestMtu(expiredMtu)
 
                     coroutineScope.launch {
                         delay(300)
                         enableNotifications(gatt, serviceUuid, notifyCharacteristicUuid)
                     }
-
                 } else {
-                    trySend(ConnectionState.Error(Exception("Service or characteristics not found")))
-                    close()
+                    _connectionState.value = ConnectionState.Error(Exception("Service or characteristics not found"))
                 }
             }
 
@@ -326,12 +315,6 @@ class RtkTransportBle(
                 }
             }
         })
-
-        awaitClose {
-            bluetoothGatt?.close()
-            bluetoothGatt = null
-            _connectionState.value = ConnectionState.Idle
-        }
     }
 
     private val writeMutex = Mutex()
@@ -392,14 +375,14 @@ class RtkTransportBle(
     }
 
     @SuppressLint("MissingPermission")
-    override suspend fun close() {
+    override fun close() {
         try {
             bluetoothGatt?.apply {
                 disconnect() // 先断开
                 close()      // 再关闭
             }
             bluetoothGatt = null
-            _connectionState.tryEmit(ConnectionState.Disconnected)
+            _connectionState.value = ConnectionState.Disconnected
         } catch (e: Exception) {
             Log.e("RtkBle", "Exception in close: ${e.message}", e)
         }

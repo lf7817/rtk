@@ -73,7 +73,7 @@ class RtkManager(
         ntripClient.disconnect()
     }
 
-    suspend fun disconnect() {
+    fun disconnect() {
         disconnectNtrip()
         rtkTransport.close()
     }

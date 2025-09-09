@@ -72,7 +72,7 @@ val rtkManager = RtkManager(scope, transport)
 
 ```kotlin
 transport.connect(
-    device,
+    address,
     serviceUuid,
     writeCharacteristicUuid,
     notifyCharacteristicUuid,
