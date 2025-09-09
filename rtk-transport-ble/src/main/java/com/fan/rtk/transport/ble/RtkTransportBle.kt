@@ -228,10 +228,11 @@ class RtkTransportBle(
         gatt.setCharacteristicNotification(notifyChar, true)
     }
 
+
     @OptIn(InternalCoroutinesApi::class)
     @SuppressLint("MissingPermission")
     fun connect(
-        device: BluetoothDevice,
+        address: String,
         serviceUuid: UUID,
         writeCharacteristicUuid: UUID,
         notifyCharacteristicUuid: UUID,
@@ -240,7 +241,15 @@ class RtkTransportBle(
         this@RtkTransportBle.close()
 
         if (!checkPermissionGranted() || !isBleEnabled()) {
-            trySend(ConnectionState.Error(Exception("BLE permission denied or disabled")))
+            _connectionState.value = ConnectionState.Error(Exception("BLE permission denied or disabled"))
+            trySend(_connectionState.value)
+            close()
+            return@callbackFlow
+        }
+
+        val device = bluetoothAdapter?.getRemoteDevice(address) ?: run {
+            _connectionState.value = ConnectionState.Error(Exception("Bluetooth device not found"))
+            trySend(_connectionState.value)
             close()
             return@callbackFlow
         }
