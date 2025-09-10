@@ -55,7 +55,10 @@ class RtkTransportBle(
     private var bluetoothGatt: BluetoothGatt? = null
     private var mtuSize: Int = 20 // 默认
 
-    private val _incoming = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val _incoming = MutableSharedFlow<ByteArray>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     override val incoming: SharedFlow<ByteArray> = _incoming.asSharedFlow()
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
@@ -127,7 +130,10 @@ class RtkTransportBle(
     fun isBleEnabled() = bluetoothAdapter?.isEnabled == true
 
     @SuppressLint("MissingPermission")
-    fun startScan(filters: List<ScanFilter> = emptyList(), timeoutMillis: Long = 10_000L): Flow<ScanResult> = callbackFlow {
+    fun startScan(
+        filters: List<ScanFilter> = emptyList(),
+        timeoutMillis: Long = 10_000L
+    ): Flow<ScanResult> = callbackFlow {
         if (currentScanCallback != null) {
             close(IllegalStateException("Scan already in progress"))
             return@callbackFlow
@@ -195,12 +201,12 @@ class RtkTransportBle(
     }
 
     @SuppressLint("MissingPermission")
-    private fun stopScanInternal(scanner: BluetoothLeScanner, callback: ScanCallback) {
+    private fun stopScanInternal(scanner: BluetoothLeScanner, callback: ScanCallback) = checkReady {
         try {
             scanner.stopScan(callback)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             // 避免 "could not find callback wrapper" 崩溃
-            Log.w("RtkBle", "Stop scan called with invalid callback: ${e.message}")
+            Log.w("RtkBle", "Stop scan exception: ${e.message}")
         } finally {
             currentScanCallback = null
         }
@@ -211,20 +217,33 @@ class RtkTransportBle(
         gatt: BluetoothGatt,
         serviceUuid: UUID,
         characteristicUuid: UUID
-    ) {
+    ) = checkReady {
         val service = gatt.getService(serviceUuid)
+
         if (service == null) {
             Log.w("RtkBle", "Service $serviceUuid not found")
-            return
+            return@checkReady
         }
 
         val notifyChar = service.getCharacteristic(characteristicUuid)
         if (notifyChar == null) {
             Log.w("RtkBle", "Characteristic $characteristicUuid not found")
-            return
+            return@checkReady
         }
 
         gatt.setCharacteristicNotification(notifyChar, true)
+    }
+
+    private fun checkReady(callback: () -> Unit) {
+        if (isBleEnabled() && checkPermissionGranted()) {
+            try {
+                callback()
+            } catch (e: Exception) {
+                _connectionState.value = ConnectionState.Error(e)
+            }
+        } else {
+            _connectionState.value = ConnectionState.Error(Exception("BLE permission denied or disabled"))
+        }
     }
 
 
@@ -236,17 +255,12 @@ class RtkTransportBle(
         writeCharacteristicUuid: UUID,
         notifyCharacteristicUuid: UUID,
         expiredMtu: Int = 247
-    ): Unit {
+    ): Unit = checkReady {
         close()
-
-        if (!checkPermissionGranted() || !isBleEnabled()) {
-            _connectionState.value = ConnectionState.Error(Exception("BLE permission denied or disabled"))
-            return
-        }
 
         val device = bluetoothAdapter?.getRemoteDevice(address) ?: run {
             _connectionState.value = ConnectionState.Error(Exception("Bluetooth device not found"))
-            return
+            return@checkReady
         }
 
         this@RtkTransportBle.serviceUuid = serviceUuid
@@ -257,17 +271,18 @@ class RtkTransportBle(
 
         bluetoothGatt = device.connectGatt(context, true, object : BluetoothGattCallback() {
 
-            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) = checkReady {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        _connectionState.tryEmit(ConnectionState.Connected)
-                        if (checkPermissionGranted() && isBleEnabled()) {
-                            coroutineScope.launch {
-                                delay(300)
+                        _connectionState.value = ConnectionState.Connected
+                        coroutineScope.launch {
+                            delay(300)
+                            checkReady {
                                 Log.d("RtkBle", "Discovering services: ${gatt.discoverServices()}")
                             }
                         }
                     }
+
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         _connectionState.value = ConnectionState.Disconnected
                     }
@@ -278,7 +293,7 @@ class RtkTransportBle(
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic,
                 status: Int
-            ) {
+            ) = checkReady {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     writeCallback?.invoke(true)
                 } else {
@@ -287,13 +302,13 @@ class RtkTransportBle(
                 }
             }
 
-            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) = checkReady {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     mtuSize = mtu - 3
                 }
             }
 
-            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) = checkReady {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     Log.d("RtkBle", "Services discovered. Size: ${gatt.services.size}")
                     Log.d("RtkBle", "Requesting MTU $expiredMtu")
@@ -301,14 +316,20 @@ class RtkTransportBle(
 
                     coroutineScope.launch {
                         delay(300)
-                        enableNotifications(gatt, serviceUuid, notifyCharacteristicUuid)
+                        checkReady {
+                            enableNotifications(gatt, serviceUuid, notifyCharacteristicUuid)
+                        }
                     }
                 } else {
-                    _connectionState.value = ConnectionState.Error(Exception("Service or characteristics not found"))
+                    _connectionState.value =
+                        ConnectionState.Error(Exception("Service or characteristics not found"))
                 }
             }
 
-            override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic
+            ) = checkReady {
                 if (characteristic.uuid == notifyCharacteristicUuid) {
                     _incoming.tryEmit(characteristic.value)
                 }
@@ -322,7 +343,7 @@ class RtkTransportBle(
 
     @SuppressLint("MissingPermission")
     override suspend fun send(data: ByteArray) {
-        if (connectionState.value != ConnectionState.Connected) return
+        if (!checkPermissionGranted() || !isBleEnabled() || connectionState.value != ConnectionState.Connected) return
 
         try {
             writeMutex.withLock {
@@ -332,7 +353,7 @@ class RtkTransportBle(
 
                 // MTU 分片发送
                 var offset = 0
-                while (offset < data.size) {
+                while (offset < data.size && checkPermissionGranted() && isBleEnabled()) {
                     val end = (offset + mtuSize).coerceAtMost(data.size)
                     val chunk = data.copyOfRange(offset, end)
 
@@ -344,7 +365,11 @@ class RtkTransportBle(
                     // Android 13+ 新 API 写法（memory-safe）
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         try {
-                            gatt.writeCharacteristic(writeChar, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                            gatt.writeCharacteristic(
+                                writeChar,
+                                chunk,
+                                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                            )
                         } catch (e: DeadSystemException) {
                             Log.e("RtkBle", "BLE system dead, need to reconnect", e)
                             // 清理本地对象
@@ -374,7 +399,7 @@ class RtkTransportBle(
     }
 
     @SuppressLint("MissingPermission")
-    override fun close() {
+    override fun close() = checkReady {
         try {
             bluetoothGatt?.apply {
                 disconnect() // 先断开
