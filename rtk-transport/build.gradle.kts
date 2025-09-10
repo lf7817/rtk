@@ -1,6 +1,6 @@
 plugins {
     id("java-library")
-    id("maven-publish")
+//    id("maven-publish")
     alias(libs.plugins.jetbrains.kotlin.jvm)
 }
 
