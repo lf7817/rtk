@@ -56,4 +56,9 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    implementation(project(":nmea"))
+    implementation(project(":rtk-core"))
+    implementation(project(":rtk-transport"))
+    implementation(project(":rtk-transport-ble"))
 }

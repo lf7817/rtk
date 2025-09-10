@@ -1,6 +1,6 @@
 plugins {
     id("java-library")
-//    id("maven-publish")
+    id("maven-publish")
     alias(libs.plugins.jetbrains.kotlin.jvm)
 }
 
@@ -27,4 +27,15 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     implementation(project(":nmea"))
     implementation(project(":rtk-transport"))
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("release") {
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
+            from(components["java"])
+        }
+    }
 }

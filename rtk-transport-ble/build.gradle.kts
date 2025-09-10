@@ -1,7 +1,7 @@
 plugins {
+    id("maven-publish")
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-//    id("maven-publish")
 }
 
 android {
@@ -30,6 +30,29 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+    }
+
+    publishing {
+        singleVariant("release") {}
+    }
+
+
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("release") {
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
+
+            afterEvaluate {
+                // Android Library 需要安全获取 release component
+                components.findByName("release")?.let { component ->
+                    from(component)
+                }
+            }
+        }
     }
 }
 

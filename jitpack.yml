@@ -1,10 +1,2 @@
 jdk:
   - openjdk11
-
-#build:
-#  commands:
-#    # 只构建并发布需要的库模块，跳过 test
-#    - ./gradlew :nmea:publishToMavenLocal -x test
-#    - ./gradlew :rtk-core:publishToMavenLocal -x test
-#    - ./gradlew :rtk-transport:publishToMavenLocal -x test
-#    - ./gradlew :rtk-transport-ble:publishToMavenLocal -x test
