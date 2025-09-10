@@ -255,7 +255,8 @@ class RtkTransportBle(
         serviceUuid: UUID,
         writeCharacteristicUuid: UUID,
         notifyCharacteristicUuid: UUID,
-        expiredMtu: Int = 247
+        expiredMtu: Int = 247,
+        autoConnect: Boolean = false
     ): Unit = checkReady {
         close()
 
@@ -270,7 +271,7 @@ class RtkTransportBle(
 
         _connectionState.value = ConnectionState.Connecting
 
-        bluetoothGatt = device.connectGatt(context, true, object : BluetoothGattCallback() {
+        bluetoothGatt = device.connectGatt(context, autoConnect, object : BluetoothGattCallback() {
 
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) = checkReady {
                 when (newState) {
