@@ -107,6 +107,7 @@ class RtkTransportBle(
                     BluetoothAdapter.STATE_OFF -> {
                         _isBleEnabled.value = false
                         _connectionState.value = ConnectionState.Disconnected
+                        currentScanCallback = null
                     }
                 }
                 Log.d("RtkBle", "Bluetooth state changed: ${state == BluetoothAdapter.STATE_ON}")
