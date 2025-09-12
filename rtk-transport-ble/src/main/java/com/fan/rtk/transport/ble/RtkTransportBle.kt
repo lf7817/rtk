@@ -62,6 +62,12 @@ class RtkTransportBle(
     )
     override val incoming: SharedFlow<ByteArray> = _incoming.asSharedFlow()
 
+    private val _config = MutableSharedFlow<ByteArray>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val config: SharedFlow<ByteArray> = _config.asSharedFlow()
+
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -70,6 +76,8 @@ class RtkTransportBle(
 
     private var writeCharacteristicUuid: UUID? = null
     private var notifyCharacteristicUuid: UUID? = null
+
+    private var configCharacteristicUuid: UUID? = null
     private var serviceUuid: UUID? = null
 
     // 保存当前扫描回调
@@ -257,6 +265,7 @@ class RtkTransportBle(
         serviceUuid: UUID,
         writeCharacteristicUuid: UUID,
         notifyCharacteristicUuid: UUID,
+        configCharacteristicUuid: UUID? = null,
         expiredMtu: Int = 247,
         autoConnect: Boolean = false
     ): Unit = checkReady {
@@ -270,6 +279,7 @@ class RtkTransportBle(
         this@RtkTransportBle.serviceUuid = serviceUuid
         this@RtkTransportBle.writeCharacteristicUuid = writeCharacteristicUuid
         this@RtkTransportBle.notifyCharacteristicUuid = notifyCharacteristicUuid
+        this@RtkTransportBle.configCharacteristicUuid = configCharacteristicUuid
 
         _connectionState.value = ConnectionState.Connecting
 
@@ -340,6 +350,8 @@ class RtkTransportBle(
             ) = checkReady {
                 if (characteristic.uuid == notifyCharacteristicUuid) {
                     _incoming.tryEmit(characteristic.value)
+                } else if (characteristic.uuid == configCharacteristicUuid) {
+                    _config.tryEmit(characteristic.value)
                 }
             }
         })
@@ -359,6 +371,65 @@ class RtkTransportBle(
             val gatt = bluetoothGatt ?: throw BleSendException.NotConnected
             val service = gatt.getService(serviceUuid) ?: throw BleSendException.ServiceNotFound
             val writeChar = service.getCharacteristic(writeCharacteristicUuid)
+                ?: throw BleSendException.CharacteristicNotFound
+
+            // MTU 分片发送
+            var offset = 0
+            while (offset < data.size && checkPermissionGranted() && isBleEnabled()) {
+                val end = (offset + mtuSize).coerceAtMost(data.size)
+                val chunk = data.copyOfRange(offset, end)
+
+
+                // 等待写入完成信号
+                val writeResult = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                writeCallback = { success -> writeResult.complete(success) }
+
+                // Android 13+ 新 API 写法（memory-safe）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        gatt.writeCharacteristic(
+                            writeChar,
+                            chunk,
+                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        )
+                    } catch (e: DeadSystemException) {
+                        Log.e("RtkBle", "BLE system dead, need to reconnect", e)
+                        // 清理本地对象
+                        this@RtkTransportBle.close()
+                        throw e  // 抛出，交给上层处理
+                    }
+                } else {
+                    // 低版本使用老方法
+                    writeChar.value = chunk
+                    writeChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    gatt.writeCharacteristic(writeChar)
+                }
+
+                // 等待回调信号，而不是固定 delay
+                if (!writeResult.await()) {
+                    throw BleSendException.WriteFailed("BLE write failed at offset=$offset, chunkSize=${chunk.size}")
+                }
+
+                offset = end
+                delay(20) // 避免写入过快，保证蓝牙稳定
+            }
+        }
+    }
+
+
+    /**
+     * 指定 UUID 发送
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun send(data: ByteArray, characteristicUuid: UUID) {
+        if (!checkPermissionGranted()) throw BleSendException.PermissionNotGranted
+        if (!isBleEnabled()) throw BleSendException.Disabled
+        if (connectionState.value != ConnectionState.Connected) throw BleSendException.NotConnected
+
+        writeMutex.withLock {
+            val gatt = bluetoothGatt ?: throw BleSendException.NotConnected
+            val service = gatt.getService(serviceUuid) ?: throw BleSendException.ServiceNotFound
+            val writeChar = service.getCharacteristic(characteristicUuid)
                 ?: throw BleSendException.CharacteristicNotFound
 
             // MTU 分片发送
