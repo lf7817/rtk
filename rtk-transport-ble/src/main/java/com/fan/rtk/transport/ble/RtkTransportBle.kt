@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -242,6 +243,22 @@ class RtkTransportBle(
         }
 
         gatt.setCharacteristicNotification(notifyChar, true)
+
+        val descriptor = notifyChar.getDescriptor(
+            UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        )
+        if (descriptor != null) {
+            val value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeDescriptor(descriptor, value)
+                Log.d("RtkBle", "Write descriptor: $descriptor")
+            } else {
+                @Suppress("DEPRECATION")
+                descriptor.value = value
+                gatt.writeDescriptor(descriptor)
+                Log.d("RtkBle", "Write descriptor: $descriptor")
+            }
+        }
     }
 
     private fun checkReady(callback: () -> Unit) {
@@ -352,6 +369,7 @@ class RtkTransportBle(
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic
             ) = checkReady {
+                Log.d("RtkBle", "Characteristic changed: ${characteristic.uuid}, data: ${characteristic.value}")
                 if (characteristic.uuid == notifyCharacteristicUuid) {
                     _incoming.tryEmit(characteristic.value)
                 } else if (characteristic.uuid == configCharacteristicUuid) {
