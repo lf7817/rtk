@@ -336,6 +336,10 @@ class RtkTransportBle(
                         delay(300)
                         checkReady {
                             enableNotifications(gatt, serviceUuid, notifyCharacteristicUuid)
+
+                            if (configCharacteristicUuid != null) {
+                                enableNotifications(gatt, serviceUuid, configCharacteristicUuid)
+                            }
                         }
                     }
                 } else {
