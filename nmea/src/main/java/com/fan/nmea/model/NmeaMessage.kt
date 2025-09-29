@@ -40,4 +40,16 @@ sealed class NmeaMessage {
         val command: String,
         val response: String
     ) : NmeaMessage()
+
+    data class GST(
+        override val raw: String,
+        val timeUtc: String?,      // hhmmss.ss
+        val rms: Double?,          // 总体 RMS 值 (m)
+        val sigmaMajor: Double?,   // 椭圆长轴 σ (m)
+        val sigmaMinor: Double?,   // 椭圆短轴 σ (m)
+        val orientation: Double?,  // 长轴方向角 (°)
+        val sigmaLat: Double?,     // 纬度方向 σ (m)
+        val sigmaLon: Double?,     // 经度方向 σ (m)
+        val sigmaAlt: Double?      // 高度方向 σ (m)
+    ) : NmeaMessage()
 }

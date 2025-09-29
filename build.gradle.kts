@@ -7,6 +7,6 @@ plugins {
 }
 
 allprojects {
-    version = "1.2.2"
+    version = "1.2.3"
     group = "com.github.lf7817.rtk"
 }

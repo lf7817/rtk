@@ -3,13 +3,16 @@ package com.fan.nmea
 import com.fan.nmea.model.NmeaMessage
 import com.fan.nmea.parser.CommandParser
 import com.fan.nmea.parser.GGAParser
+import com.fan.nmea.parser.GSTParser
 import com.fan.nmea.parser.NmeaParser
 import com.fan.nmea.parser.RMCParser
 import com.fan.nmea.parser.UniHeadingParser
 
 
 class NmeaParserManager(
-    parsers: List<NmeaParser<out NmeaMessage>> = listOf(GGAParser(), RMCParser(), UniHeadingParser(), CommandParser())
+    parsers: List<NmeaParser<out NmeaMessage>> = listOf(GGAParser(), RMCParser(), UniHeadingParser(), CommandParser(),
+        GSTParser()
+    )
 ) {
     private val byType = parsers.associateBy { it.type.uppercase() }
 
