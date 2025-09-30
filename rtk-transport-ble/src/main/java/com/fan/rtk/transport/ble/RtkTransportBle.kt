@@ -384,16 +384,14 @@ class RtkTransportBle(
     private var writeCallback: ((Boolean) -> Unit)? = null
 
     @SuppressLint("MissingPermission")
-    override suspend fun send(data: ByteArray) {
-        write(data, writeCharacteristicUuid!!)
-    }
+    override suspend fun send(data: ByteArray) = write(data, writeCharacteristicUuid!!)
 
 
     /**
      * 指定 UUID 发送
      */
     @SuppressLint("MissingPermission")
-    suspend fun write(data: ByteArray, characteristicUuid: UUID) {
+    suspend fun write(data: ByteArray, characteristicUuid: UUID): Result<Unit> = runCatching {
         if (!checkPermissionGranted()) throw BleSendException.PermissionNotGranted
         if (!isBleEnabled()) throw BleSendException.Disabled
         if (connectionState.value != ConnectionState.Connected) throw BleSendException.NotConnected
