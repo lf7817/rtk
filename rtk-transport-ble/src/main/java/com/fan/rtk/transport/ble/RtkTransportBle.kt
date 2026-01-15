@@ -384,7 +384,16 @@ class RtkTransportBle(
     private var writeCallback: ((Boolean) -> Unit)? = null
 
     @SuppressLint("MissingPermission")
-    override suspend fun send(data: ByteArray) = write(data, writeCharacteristicUuid!!)
+    override suspend fun send(data: ByteArray): Result<Unit> {
+        // 发送前先检查连接状态，避免未连接时调用 write 导致异常
+        if (connectionState.value != ConnectionState.Connected) {
+            return Result.failure(BleSendException.NotConnected)
+        }
+        if (writeCharacteristicUuid == null) {
+            return Result.failure(BleSendException.CharacteristicNotFound)
+        }
+        return write(data, writeCharacteristicUuid!!)
+    }
 
 
     /**
