@@ -22,6 +22,13 @@ import java.net.Socket
 import java.util.Base64
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.text.contains
+import kotlin.text.Regex
+
+private fun extractStatusCode(responseLine: String): Int? {
+    // HTTP/1.1 200 OK 或 HTTP/1.0 200 OK
+    val regex = Regex("HTTP/\\d\\.\\d\\s+(\\d{3})")
+    return regex.find(responseLine)?.groupValues?.get(1)?.toIntOrNull()
+}
 
 class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())) {
     private var config: NtripConfig? = null
@@ -80,26 +87,47 @@ class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Di
                 reader = socket!!.getInputStream()
 
                 // 发送请求
-                val authHeader = if (!config!!.username.isNullOrBlank() && config!!.password != null) {
+                val authHeader = if (!config!!.username.isNullOrBlank() && !config!!.password.isNullOrBlank()) {
                     "Authorization: Basic " + Base64.getEncoder()
                         .encodeToString("${config!!.username}:${config!!.password}".toByteArray(Charsets.US_ASCII))
                 } else ""
                 val requestHeaders = buildString {
                     append("GET /${config!!.mountPoint} HTTP/1.1\r\n")
                     append("User-Agent: NTRIP $userAgent\r\n")
-                    append("Ntrip-Version: Ntrip/2.0\r\n")
+                    val version = config!!.ntripVersion?.takeIf { it.isNotBlank() }
+                    if (version != null) {
+                        append("Ntrip-Version: Ntrip/$version\r\n")
+                    }
                     if (authHeader.isNotEmpty()) append("$authHeader\r\n")
                     append("\r\n")
                 }
                 writer!!.write(requestHeaders)
                 writer!!.flush()
 
-                // 检查 NTRIP 响应
+                // 检查 NTRIP 响应 - 完整读取 HTTP 响应头
                 val headerReader = BufferedReader(InputStreamReader(reader!!, Charsets.US_ASCII))
                 val firstLine = headerReader.readLine()
-                if (firstLine == null || !firstLine.contains("200", ignoreCase = true)) {
-                    throw IllegalStateException("NTRIP server rejected: $firstLine")
+                if (firstLine == null) {
+                    throw IllegalStateException("NTRIP server closed connection before response")
                 }
+                
+                // 读取完整的 HTTP 响应头（直到空行）
+                val responseHeaders = mutableListOf<String>()
+                responseHeaders.add(firstLine)
+                var line: String?
+                while (headerReader.readLine().also { line = it } != null && line!!.isNotEmpty()) {
+                    responseHeaders.add(line!!)
+                }
+                
+                // 检查响应状态码
+                val statusCode = extractStatusCode(firstLine)
+                if (statusCode == null || statusCode !in 200..299) {
+                    val errorMsg = "NTRIP server rejected: $firstLine\nHeaders: ${responseHeaders.joinToString("\n")}"
+                    println(errorMsg)
+                    throw IllegalStateException(errorMsg)
+                }
+                
+                println("NTRIP connected successfully: $firstLine")
 
                 _connectionState.value = ConnectionState.Connected
 
@@ -142,13 +170,20 @@ class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Di
                         break
                     }
                     if (read > 0) {
-                        // TODO 频繁断开、连接蓝牙设备时这里会发送失败，暂未解决；临时解决方法蓝牙连接或断开时重连
                         val result = trySend(buffer.copyOf(read))
                         if (result.isClosed) {
-                            println("Send failed: isClosed")
+                            println("NTRIP channel closed, stopping stream")
+                            break
                         }
                         if (!result.isSuccess) {
-                            println("Send failed: ${result.exceptionOrNull()}")
+                            val exception = result.exceptionOrNull()
+                            if (exception is CancellationException) {
+                                println("NTRIP channel cancelled")
+                                break
+                            } else {
+                                println("NTRIP send failed: $exception")
+                                // 非取消异常，继续尝试
+                            }
                         }
                     }
                 }
