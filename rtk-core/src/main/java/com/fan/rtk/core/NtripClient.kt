@@ -86,7 +86,7 @@ class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Di
                 } else ""
                 val requestHeaders = buildString {
                     append("GET /${config!!.mountPoint} HTTP/1.1\r\n")
-                    append("User-Agent: $userAgent\r\n")
+                    append("User-Agent: NTRIP $userAgent\r\n")
                     append("Ntrip-Version: Ntrip/2.0\r\n")
                     if (authHeader.isNotEmpty()) append("$authHeader\r\n")
                     append("\r\n")
