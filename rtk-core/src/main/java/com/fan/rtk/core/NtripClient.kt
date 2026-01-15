@@ -22,13 +22,6 @@ import java.net.Socket
 import java.util.Base64
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.text.contains
-import kotlin.text.Regex
-
-private fun extractStatusCode(responseLine: String): Int? {
-    // HTTP/1.1 200 OK 或 HTTP/1.0 200 OK
-    val regex = Regex("HTTP/\\d\\.\\d\\s+(\\d{3})")
-    return regex.find(responseLine)?.groupValues?.get(1)?.toIntOrNull()
-}
 
 class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())) {
     private var config: NtripConfig? = null
@@ -104,30 +97,12 @@ class NtripClient(private val coroutineScope: CoroutineScope = CoroutineScope(Di
                 writer!!.write(requestHeaders)
                 writer!!.flush()
 
-                // 检查 NTRIP 响应 - 完整读取 HTTP 响应头
+                // 检查 NTRIP 响应
                 val headerReader = BufferedReader(InputStreamReader(reader!!, Charsets.US_ASCII))
                 val firstLine = headerReader.readLine()
-                if (firstLine == null) {
-                    throw IllegalStateException("NTRIP server closed connection before response")
+                if (firstLine == null || !firstLine.contains("200", ignoreCase = true)) {
+                    throw IllegalStateException("NTRIP server rejected: $firstLine")
                 }
-                
-                // 读取完整的 HTTP 响应头（直到空行）
-                val responseHeaders = mutableListOf<String>()
-                responseHeaders.add(firstLine)
-                var line: String?
-                while (headerReader.readLine().also { line = it } != null && line!!.isNotEmpty()) {
-                    responseHeaders.add(line!!)
-                }
-                
-                // 检查响应状态码
-                val statusCode = extractStatusCode(firstLine)
-                if (statusCode == null || statusCode !in 200..299) {
-                    val errorMsg = "NTRIP server rejected: $firstLine\nHeaders: ${responseHeaders.joinToString("\n")}"
-                    println(errorMsg)
-                    throw IllegalStateException(errorMsg)
-                }
-                
-                println("NTRIP connected successfully: $firstLine")
 
                 _connectionState.value = ConnectionState.Connected
 
