@@ -61,4 +61,5 @@ dependencies {
     implementation(project(":rtk-core"))
     implementation(project(":rtk-transport"))
     implementation(project(":rtk-transport-ble"))
+    implementation(project(":rtk-transport-usb"))
 }
