@@ -15,6 +15,7 @@
             <option value="$PROJECT_DIR$/rtk-core" />
             <option value="$PROJECT_DIR$/rtk-transport" />
             <option value="$PROJECT_DIR$/rtk-transport-ble" />
+            <option value="$PROJECT_DIR$/rtk-transport-usb" />
           </set>
         </option>
       </GradleProjectSettings>

@@ -18,6 +18,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
@@ -26,6 +27,7 @@ include(":nmea")
 include(":rtk-core")
 include(":rtk-transport")
 include(":rtk-transport-ble")
+include(":rtk-transport-usb")
 
 val localProperties = Properties()
 val localPropertiesFile = file("local.properties")
