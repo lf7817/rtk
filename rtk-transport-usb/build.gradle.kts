@@ -61,5 +61,5 @@ dependencies {
     androidTestImplementation(libs.runner)
     androidTestImplementation(libs.espresso.core)
     implementation(project(":rtk-transport"))
-    implementation("com.github.felHR85:UsbSerial:6.1.0")
+    implementation(libs.usbserial)
 }
